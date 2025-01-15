@@ -5,3 +5,5 @@ plost
 requests
 matplotlib
 seaborn
+plotly
+Pillow
