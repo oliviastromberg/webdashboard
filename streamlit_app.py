@@ -18,6 +18,66 @@ st.image(Image.open('streamlit-logo-secondary-colormark-darktext.png'), width=20
 min_date = datetime(2023, 1, 1)
 max_date = datetime(2024, 12, 31)
 
+# ---- FETCH CO2 EMISSIONS DATA ----
+with st.spinner("Fetching CO2 emissions data..."):
+    try:
+        token = "M8DialxaPTRPI"  # Replace with your actual API token
+        country_code = "ES"
+        co2_data = get_co2_emissions_data(token, country_code)
+    except Exception as e:
+        st.error(f"Error fetching CO₂ emissions data: {e}")
+        co2_data = {}
+
+# ---- DISPLAY CO2 EMISSIONS DATA ----
+if 'data' in co2_data:
+    st.subheader("Current Carbon Dioxide Emissions")
+    co2_col1, co2_col2, co2_col3 = st.columns(3)
+
+    # Format the timestamp into a human-readable format
+    timestamp_str = co2_data['data']['datetime']
+    timestamp = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S.%fZ')
+    formatted_timestamp = timestamp.strftime('%Y-%m-%d %H:%M:%S')
+
+    # Display CO2 metrics
+    co2_col1.metric("Carbon Intensity (gCO₂/kWh)", f"{co2_data['data']['carbonIntensity']}", "Latest")
+    co2_col2.metric("Fossil Fuel %", f"{co2_data['data']['fossilFuelPercentage']}%",
+                    "Electricity from fossil fuels")
+    co2_col3.metric("Timestamp", formatted_timestamp, "Date and Time of Data")
+
+    # ---- CO2 Intensity Gauge Chart ----
+    carbon_intensity = co2_data['data']['carbonIntensity']
+
+    # Set the color thresholds
+    if carbon_intensity < 150:
+        color = 'green'
+    elif carbon_intensity <= 400:
+        color = 'yellow'
+    else:
+        color = 'red'
+
+    # Create a Gauge chart to visualize CO2 intensity
+    gauge = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=carbon_intensity,
+        title={'text': "Current CO₂ Intensity (gCO₂/kWh)"},
+        #delta={'reference': 0},
+        gauge={
+            'axis': {'range': [None, 1000]},
+            'bar': {'color': 'black', 'thickness': 0.5 },
+            'steps': [
+                {'range': [0, 150], 'color': 'green'},
+                {'range': [150, 400], 'color': 'yellow'},
+                {'range': [400, 1000], 'color': 'red'}
+            ]
+        }
+    ))
+
+    # Display the Gauge chart
+    st.plotly_chart(gauge)
+
+else:
+    st.error("Error fetching CO₂ emissions data. Please check the API connection.")
+
 # ---- SECTION 1: USER INPUT ----
 st.sidebar.header("Select Date Range for Electricity Prices")
 col1, col2 = st.sidebar.columns(2)
@@ -38,16 +98,6 @@ if fetch_data_button:
         except Exception as e:
             st.error(f"Error fetching electricity price data: {e}")
             price_data = pd.DataFrame()  # Empty DataFrame as fallback
-
-    # ---- FETCH CO2 EMISSIONS DATA ----
-    with st.spinner("Fetching CO2 emissions data..."):
-        try:
-            token = "M8DialxaPTRPI"  # Replace with your actual API token
-            country_code = "ES"
-            co2_data = get_co2_emissions_data(token, country_code)
-        except Exception as e:
-            st.error(f"Error fetching CO₂ emissions data: {e}")
-            co2_data = {}
 
     # ---- DISPLAY ELECTRICITY PRICES ----
     if not price_data.empty:
@@ -85,59 +135,8 @@ if fetch_data_button:
             yaxis=dict(showgrid=True)
         )
         st.plotly_chart(fig_hist)
-
     else:
         st.warning("No electricity price data found for the selected date range.")
-
-    # ---- DISPLAY CO2 EMISSIONS DATA ----
-    if 'data' in co2_data:
-        st.subheader("Today's Carbon Dioxide Emissions")
-        co2_col1, co2_col2, co2_col3 = st.columns(3)
-
-        # Format the timestamp into a human-readable format
-        timestamp_str = co2_data['data']['datetime']
-        timestamp = datetime.strptime(timestamp_str, '%Y-%m-%dT%H:%M:%S.%fZ')
-        formatted_timestamp = timestamp.strftime('%Y-%m-%d %H:%M:%S')
-
-        # Display CO2 metrics
-        co2_col1.metric("Carbon Intensity (gCO₂/kWh)", f"{co2_data['data']['carbonIntensity']}", "Latest")
-        co2_col2.metric("Fossil Fuel %", f"{co2_data['data']['fossilFuelPercentage']}%",
-                        "Electricity from fossil fuels")
-        co2_col3.metric("Timestamp", formatted_timestamp, "Date and Time of Data")
-
-        # ---- CO2 Intensity Gauge Chart ----
-        carbon_intensity = co2_data['data']['carbonIntensity']
-
-        # Set the color thresholds
-        if carbon_intensity < 150:
-            color = 'green'
-        elif carbon_intensity <= 400:
-            color = 'yellow'
-        else:
-            color = 'red'
-
-        # Create a Gauge chart to visualize CO2 intensity
-        gauge = go.Figure(go.Indicator(
-            mode="gauge+number+delta",
-            value=carbon_intensity,
-            title={'text': "Current CO₂ Intensity (gCO₂/kWh)"},
-            delta={'reference': 0},
-            gauge={
-                'axis': {'range': [None, 1000]},
-                'bar': {'color': color},
-                'steps': [
-                    {'range': [0, 150], 'color': 'green'},
-                    {'range': [150, 400], 'color': 'yellow'},
-                    {'range': [400, 1000], 'color': 'red'}
-                ]
-            }
-        ))
-
-        # Display the Gauge chart
-        st.plotly_chart(gauge)
-
-    else:
-        st.error("Error fetching CO₂ emissions data. Please check the API connection.")
 
 # ---- FOOTER ----
 st.sidebar.markdown("---")
