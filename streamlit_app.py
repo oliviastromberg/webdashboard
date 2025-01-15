@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from api_electricity import get_electricity_prices  # Import the electricity price function
-from api_connection import get_co2_emissions_data  # Import the CO2 emissions function
+import plotly.graph_objects as go
+from api_electricity import get_electricity_prices
+from api_connection import get_co2_emissions_data
 from datetime import datetime
 from PIL import Image
 
@@ -14,8 +15,8 @@ st.title("Electricity Prices and Carbon Dioxide Intensity for Spain")
 st.image(Image.open('streamlit-logo-secondary-colormark-darktext.png'), width=200)
 
 # ---- HARD-CODED AVAILABLE DATE RANGE ----
-min_date = datetime(2023, 1, 1)  # Replace with the actual start date of your data
-max_date = datetime(2024, 12, 31)  # Replace with the actual end date of your data
+min_date = datetime(2023, 1, 1)
+max_date = datetime(2024, 12, 31)
 
 # ---- SECTION 1: USER INPUT ----
 st.sidebar.header("Select Date Range for Electricity Prices")
@@ -41,9 +42,8 @@ if fetch_data_button:
     # ---- FETCH CO2 EMISSIONS DATA ----
     with st.spinner("Fetching CO2 emissions data..."):
         try:
-            # Replace token and country_code with real values
             token = "M8DialxaPTRPI"  # Replace with your actual API token
-            country_code = "ES"      # ISO code for Spain
+            country_code = "ES"
             co2_data = get_co2_emissions_data(token, country_code)
         except Exception as e:
             st.error(f"Error fetching CO₂ emissions data: {e}")
@@ -74,6 +74,18 @@ if fetch_data_button:
             yaxis=dict(showgrid=True)
         )
         st.plotly_chart(fig)
+
+        # ---- Electricity Price Histogram ----
+        st.subheader("Histogram of Electricity Prices")
+        fig_hist = px.histogram(price_data, x='€/MWh', nbins=30, title="Distribution of Electricity Prices (€/MWh)")
+        fig_hist.update_layout(
+            xaxis_title="Price (€/MWh)",
+            yaxis_title="Frequency",
+            xaxis=dict(showgrid=True),
+            yaxis=dict(showgrid=True)
+        )
+        st.plotly_chart(fig_hist)
+
     else:
         st.warning("No electricity price data found for the selected date range.")
 
@@ -89,10 +101,41 @@ if fetch_data_button:
 
         # Display CO2 metrics
         co2_col1.metric("Carbon Intensity (gCO₂/kWh)", f"{co2_data['data']['carbonIntensity']}", "Latest")
-        co2_col2.metric("Fossil Fuel %", f"{co2_data['data']['fossilFuelPercentage']}%", "Electricity from fossil fuels")
+        co2_col2.metric("Fossil Fuel %", f"{co2_data['data']['fossilFuelPercentage']}%",
+                        "Electricity from fossil fuels")
         co2_col3.metric("Timestamp", formatted_timestamp, "Date and Time of Data")
 
-        # Optional: Add a historical CO2 plot if you can fetch historical data
+        # ---- CO2 Intensity Gauge Chart ----
+        carbon_intensity = co2_data['data']['carbonIntensity']
+
+        # Set the color thresholds
+        if carbon_intensity < 150:
+            color = 'green'
+        elif carbon_intensity <= 400:
+            color = 'yellow'
+        else:
+            color = 'red'
+
+        # Create a Gauge chart to visualize CO2 intensity
+        gauge = go.Figure(go.Indicator(
+            mode="gauge+number+delta",
+            value=carbon_intensity,
+            title={'text': "Current CO₂ Intensity (gCO₂/kWh)"},
+            delta={'reference': 0},
+            gauge={
+                'axis': {'range': [None, 1000]},
+                'bar': {'color': color},
+                'steps': [
+                    {'range': [0, 150], 'color': 'green'},
+                    {'range': [150, 400], 'color': 'yellow'},
+                    {'range': [400, 1000], 'color': 'red'}
+                ]
+            }
+        ))
+
+        # Display the Gauge chart
+        st.plotly_chart(gauge)
+
     else:
         st.error("Error fetching CO₂ emissions data. Please check the API connection.")
 
