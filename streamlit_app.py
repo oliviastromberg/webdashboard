@@ -18,6 +18,17 @@ st.image(Image.open('streamlit-logo-secondary-colormark-darktext.png'), width=20
 min_date = datetime(2023, 1, 1)
 max_date = datetime(2024, 12, 31)
 
+# ---- SECTION 1: USER INPUT ----
+st.sidebar.header("Select Date Range for Electricity Prices")
+col1, col2 = st.sidebar.columns(2)
+with col1:
+    start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
+with col2:
+    end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
+
+st.sidebar.header("Fetch Data")
+fetch_data_button = st.sidebar.button("Fetch Data")
+
 # ---- FETCH CO2 EMISSIONS DATA ----
 with st.spinner("Fetching CO2 emissions data..."):
     try:
@@ -27,6 +38,56 @@ with st.spinner("Fetching CO2 emissions data..."):
     except Exception as e:
         st.error(f"Error fetching CO₂ emissions data: {e}")
         co2_data = {}
+
+# ---- DISPLAY ELECTRICITY PRICES ----
+if fetch_data_button:
+    # ---- FETCH ELECTRICITY PRICE DATA ----
+    with st.spinner("Fetching electricity price data..."):
+        try:
+            price_data = get_electricity_prices(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
+        except Exception as e:
+            st.error(f"Error fetching electricity price data: {e}")
+            price_data = pd.DataFrame()  # Empty DataFrame as fallback
+
+    if not price_data.empty:
+        # Electricity Prices Section
+        st.subheader("Electricity Spot Prices (€/MWh)")
+
+        # Modify the columns as per your requirement
+        price_data = price_data.rename(columns={
+            'datetime_utc': 'Date and Time',
+            'value': '€/MWh'
+        })
+
+        # Drop the 'geo_name' column if it exists
+        if 'geo_name' in price_data.columns:
+            price_data = price_data.drop(columns=['geo_name'])
+
+        st.dataframe(price_data)
+
+        # Plot electricity price data using Plotly
+        st.subheader("Electricity Prices Over Time")
+        fig = px.line(price_data, x='Date and Time', y='€/MWh', title="Electricity Spot Price (€/MWh)")
+        fig.update_layout(
+            xaxis_title="Time",
+            yaxis_title="Price (€/MWh)",
+            xaxis=dict(showgrid=True),
+            yaxis=dict(showgrid=True)
+        )
+        st.plotly_chart(fig)
+
+        # ---- Electricity Price Histogram ----
+        st.subheader("Histogram of Electricity Prices")
+        fig_hist = px.histogram(price_data, x='€/MWh', nbins=30, title="Distribution of Electricity Prices (€/MWh)")
+        fig_hist.update_layout(
+            xaxis_title="Price (€/MWh)",
+            yaxis_title="Frequency",
+            xaxis=dict(showgrid=True),
+            yaxis=dict(showgrid=True)
+        )
+        st.plotly_chart(fig_hist)
+    else:
+        st.warning("No electricity price data found for the selected date range.")
 
 # ---- DISPLAY CO2 EMISSIONS DATA ----
 if 'data' in co2_data:
@@ -60,10 +121,9 @@ if 'data' in co2_data:
         mode="gauge+number",
         value=carbon_intensity,
         title={'text': "Current CO₂ Intensity (gCO₂/kWh)"},
-        #delta={'reference': 0},
         gauge={
             'axis': {'range': [None, 1000]},
-            'bar': {'color': 'black', 'thickness': 0.5 },
+            'bar': {'color': 'black', 'thickness': 0.5},
             'steps': [
                 {'range': [0, 150], 'color': 'green'},
                 {'range': [150, 400], 'color': 'yellow'},
@@ -78,66 +138,6 @@ if 'data' in co2_data:
 else:
     st.error("Error fetching CO₂ emissions data. Please check the API connection.")
 
-# ---- SECTION 1: USER INPUT ----
-st.sidebar.header("Select Date Range for Electricity Prices")
-col1, col2 = st.sidebar.columns(2)
-with col1:
-    start_date = st.date_input("Start Date", value=min_date, min_value=min_date, max_value=max_date)
-with col2:
-    end_date = st.date_input("End Date", value=max_date, min_value=min_date, max_value=max_date)
-
-st.sidebar.header("Fetch Data")
-fetch_data_button = st.sidebar.button("Fetch Data")
-
-# ---- SECTION 2: FETCH AND DISPLAY DATA ----
-if fetch_data_button:
-    # ---- FETCH ELECTRICITY PRICE DATA ----
-    with st.spinner("Fetching electricity price data..."):
-        try:
-            price_data = get_electricity_prices(start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d'))
-        except Exception as e:
-            st.error(f"Error fetching electricity price data: {e}")
-            price_data = pd.DataFrame()  # Empty DataFrame as fallback
-
-    # ---- DISPLAY ELECTRICITY PRICES ----
-    if not price_data.empty:
-        st.subheader("Electricity Spot Prices (€/MWh)")
-
-        # Modify the columns as per your requirement
-        price_data = price_data.rename(columns={
-            'datetime_utc': 'Date and Time',
-            'value': '€/MWh'
-        })
-
-        # Drop the 'geo_name' column
-        price_data = price_data.drop(columns=['geo_name'])
-
-        st.dataframe(price_data)
-
-        # Plot electricity price data using Plotly
-        st.subheader("Electricity Prices Over Time")
-        fig = px.line(price_data, x='Date and Time', y='€/MWh', title="Electricity Spot Price (€/MWh)")
-        fig.update_layout(
-            xaxis_title="Date and Time",
-            yaxis_title="Price (€/MWh)",
-            xaxis=dict(showgrid=True),
-            yaxis=dict(showgrid=True)
-        )
-        st.plotly_chart(fig)
-
-        # ---- Electricity Price Histogram ----
-        st.subheader("Histogram of Electricity Prices")
-        fig_hist = px.histogram(price_data, x='€/MWh', nbins=30, title="Distribution of Electricity Prices (€/MWh)")
-        fig_hist.update_layout(
-            xaxis_title="Price (€/MWh)",
-            yaxis_title="Frequency",
-            xaxis=dict(showgrid=True),
-            yaxis=dict(showgrid=True)
-        )
-        st.plotly_chart(fig_hist)
-    else:
-        st.warning("No electricity price data found for the selected date range.")
-
 # ---- FOOTER ----
 st.sidebar.markdown("---")
-st.sidebar.caption("Developed by Olivia, Lin and Milán using Streamlit ❤")
+st.sidebar.caption("Developed by Olivia, Lin, and Milán using Streamlit")
